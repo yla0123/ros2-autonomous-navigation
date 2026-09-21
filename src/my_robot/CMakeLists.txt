@@ -14,23 +14,8 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 # =============================================
-add_executable(robot_node src/robot_node.cpp)
-target_link_libraries(robot_node
-    rclcpp::rclcpp
-    std_msgs::std_msgs
-    geometry_msgs::geometry_msgs
-    sensor_msgs::sensor_msgs
-)
-
-add_executable(status_listener src/status_listener.cpp)
-target_link_libraries(status_listener
-    rclcpp::rclcpp
-    std_msgs::std_msgs
-    geometry_msgs::geometry_msgs
-)
-
-add_executable(imu_listener src/imu_listener.cpp)
-target_link_libraries(imu_listener
+add_executable(odometry_node src/odometry_node.cpp)
+target_link_libraries(odometry_node
     rclcpp::rclcpp
     std_msgs::std_msgs
     geometry_msgs::geometry_msgs
@@ -38,9 +23,7 @@ target_link_libraries(imu_listener
 )
 
 install(
-    TARGETS robot_node
-    TARGETS status_listener
-    TARGETS imu_listener
+    TARGETS odometry_node
     DESTINATION lib/${PROJECT_NAME}
 )
 # =============================================
