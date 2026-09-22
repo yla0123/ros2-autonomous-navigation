@@ -3,6 +3,9 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "nav_msgs/msg/odometry.hpp"
+
+const double pi = std::acos(-1.0);
 
 class OdometryNode : public rclcpp::Node
 {
@@ -19,10 +22,16 @@ public:
                     this,
                     std::placeholders::_1));
 
+        odom_pub_ =       this->create_publisher<nav_msgs::msg::Odometry>("/odom",10);
         RCLCPP_INFO(this->get_logger(), "Odometry node started.");
     }
 
 private:
+    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr
+        joint_state_sub_;
+    
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+
     void jointStateCallback(
         const sensor_msgs::msg::JointState::SharedPtr msg)
     {
@@ -46,18 +55,41 @@ private:
 
         const double delta_s = (distance_r + distance_l)/2;
         const double delta_theta = (distance_r - distance_l)/wheel_separation_;
+        const double theta_mid = theta_ + delta_theta/2.0; 
 
-        x_ += delta_s * std::cos(theta_);
-        y_ += delta_s * std::sin(theta_);
+        x_ += delta_s * std::cos(theta_mid);
+        y_ += delta_s * std::sin(theta_mid);
         theta_ += delta_theta;
 
         previous_position_l_ = msg->position[0];
         previous_position_r_ = msg->position[1];
+        theta_ = std::atan2(std::sin(theta_), std::cos(theta_));
 
-        RCLCPP_INFO(
-        this->get_logger(),
-        "Pose: x=%.3f m, y=%.3f m, theta=%.3f rad",
-        x_, y_, theta_);
+        const double velocity = wheel_radius_*(msg->velocity[1]+msg->velocity[0])/2;
+        const double angular_velocity = wheel_radius_*(msg->velocity[1]-msg->velocity[0])/wheel_separation_;
+
+        nav_msgs::msg::Odometry  odom_msg;
+        odom_msg.header.stamp = this->now();
+        odom_msg.header.frame_id = "odom";
+        odom_msg.child_frame_id = "base_link";
+
+        odom_msg.pose.pose.position.x = x_;
+        odom_msg.pose.pose.position.y = y_;
+        odom_msg.pose.pose.position.z = 0.0;
+
+        odom_msg.pose.pose.orientation.x = 0.0;
+        odom_msg.pose.pose.orientation.y = 0.0;
+        odom_msg.pose.pose.orientation.z = std::sin(theta_/2.0);
+        odom_msg.pose.pose.orientation.w = std::cos(theta_/2.0);
+
+        odom_msg.twist.twist.linear.x = velocity;
+        odom_msg.twist.twist.angular.z = angular_velocity;
+
+        odom_pub_->publish(odom_msg);
+        // RCLCPP_INFO(
+        // this->get_logger(),
+        // "Pose: x=%.3f m, y=%.3f m, theta=%.3f rad",
+        // x_, y_, theta_);
     }
 
     // Robot Geometry
@@ -71,8 +103,6 @@ private:
     double x_ = 0.0;
     double y_ = 0.0;
     double theta_ = 0.0;
-    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr
-        joint_state_sub_;
 };
 
 int main(int argc, char* argv[]){
