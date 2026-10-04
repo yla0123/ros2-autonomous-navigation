@@ -34,11 +34,10 @@ private:
 
     void jointStateCallback(
         const sensor_msgs::msg::JointState::SharedPtr msg)
-    {
+{
         if (msg->name.size() < 2 ||
             msg->position.size() < 2 ||
-            msg->velocity.size() < 2)
-        {
+            msg->velocity.size() < 2){
             return;
         }
 
@@ -85,6 +84,15 @@ private:
         odom_msg.twist.twist.linear.x = velocity;
         odom_msg.twist.twist.angular.z = angular_velocity;
 
+        // Pose covariance
+        odom_msg.pose.covariance[0]  = 0.0025;  // x:   (0.05 m)^2
+        odom_msg.pose.covariance[7]  = 0.0025;  // y:   (0.05 m)^2
+        odom_msg.pose.covariance[35] = 0.0004;  // yaw: (0.02 rad)^2
+
+        // Twist covariance
+        odom_msg.twist.covariance[0]  = 0.0001; // vx:  (0.01 m/s)^2
+        odom_msg.twist.covariance[35] = 0.0004; // vyaw:(0.02 rad/s)^2
+        
         odom_pub_->publish(odom_msg);
         // RCLCPP_INFO(
         // this->get_logger(),
