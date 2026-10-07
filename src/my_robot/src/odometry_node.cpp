@@ -91,6 +91,7 @@ private:
 
         // Twist covariance
         odom_msg.twist.covariance[0]  = 0.0001; // vx:  (0.01 m/s)^2
+        odom_msg.twist.covariance[7]  = 0.0001; // vy:  (0.01 m/s)^2
         odom_msg.twist.covariance[35] = 0.0004; // vyaw:(0.02 rad/s)^2
         
         odom_pub_->publish(odom_msg);
