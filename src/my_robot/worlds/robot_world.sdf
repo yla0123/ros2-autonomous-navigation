@@ -49,9 +49,20 @@
         filename="gz-sim-imu-system"
         name="gz::sim::systems::Imu">
     </plugin>
-    
+
+    <plugin
+    filename="gz-sim-sensors-system"
+    name="gz::sim::systems::Sensors">
+    <render_engine>ogre2</render_engine>
+    </plugin>
+
     <model name="mobile_robot">
         <pose>0 0 0.15 0 0 0</pose>
+
+        <plugin
+        filename="gz-sim-joint-state-publisher-system"
+        name="gz::sim::systems::JointStatePublisher">
+        </plugin>
 
         <!-- Chassis -->
         <link name="chassis_link">
@@ -117,6 +128,31 @@
                 </imu>
             </sensor>
             
+            <sensor name="lidar_sensor" type="gpu_lidar">
+                <pose>0.20 0 0.12 0 0 0</pose>
+
+                <topic>/scan</topic>
+                <update_rate>10</update_rate>
+                <always_on>true</always_on>
+                <visualize>true</visualize>
+                <lidar>
+                    <scan>
+                        <horizontal>
+                            <samples>360</samples>
+                            <resolution>1</resolution>
+                            <min_angle>-3.14159</min_angle>
+                            <max_angle>3.14159</max_angle>
+                        </horizontal>
+                    </scan>
+
+                    <range>
+                        <min>0.12</min>
+                        <max>10.0</max>
+                        <resolution>0.01</resolution>
+                    </range>
+                </lidar>
+            </sensor>
+
             <collision name="collision">
             <geometry>
                 <box>
@@ -322,13 +358,32 @@
 
             <topic>/cmd_vel</topic>
         </plugin>
-
-        <plugin
-        filename="gz-sim-joint-state-publisher-system"
-        name="gz::sim::systems::JointStatePublisher">
-        </plugin>
     </model>
 
+
+    <model name="test_obstacle">
+        <static>true</static>
+
+        <pose>2 0 0.5 0 0 0</pose>
+
+        <link name="box_link">
+            <collision name="collision">
+                <geometry>
+                    <box>
+                        <size>0.5 0.5 1.0</size>
+                    </box>
+                </geometry>
+            </collision>
+
+            <visual name="visual">
+                <geometry>
+                    <box>
+                        <size>0.5 0.5 1.0</size>
+                    </box>
+                </geometry>
+            </visual>
+        </link>
+    </model>
 
     <!-- Light -->
     <light name="sun" type="directional">

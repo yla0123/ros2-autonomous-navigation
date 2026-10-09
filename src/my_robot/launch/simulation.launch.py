@@ -32,6 +32,8 @@ def generate_launch_description():
 
             "/imu@sensor_msgs/msg/Imu[gz.msgs.IMU",
 
+            "/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan",
+
             "/model/mobile_robot/odometry"
             + "@nav_msgs/msg/Odometry[gz.msgs.Odometry",
 
@@ -65,8 +67,7 @@ def generate_launch_description():
             os.path.join(ros_gz_sim_share, "launch", "gz_sim.launch.py")
         ),
         launch_arguments = {"gz_args": world_file}.items()
-
     )
 
 
-    return LaunchDescription([bridge, odometry_node, ekf_node, gazebo])
+    return LaunchDescription([bridge, odometry_node, ekf_node])
