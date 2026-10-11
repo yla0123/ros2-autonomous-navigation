@@ -22,7 +22,7 @@ public:
                     this,
                     std::placeholders::_1));
 
-        odom_pub_ =       this->create_publisher<nav_msgs::msg::Odometry>("/odom",10);
+        odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom",10);
         RCLCPP_INFO(this->get_logger(), "Odometry node started.");
     }
 
