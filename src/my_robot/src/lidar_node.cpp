@@ -2,6 +2,9 @@
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
+#include "nav_msgs/msg/path.hpp"
+
+#include "my_robot/astar_planner.hpp"
 
 #include <cmath>
 #include <vector>
@@ -10,7 +13,7 @@
 class LidarNode : public rclcpp::Node
 {
     public:
-        LidarNode() : Node("lidar_node")
+        LidarNode() : Node("lidar_node"), planner_(width_, height_)
         {
             grid_.assign(width_ * height_, -1);
 
@@ -29,6 +32,8 @@ class LidarNode : public rclcpp::Node
         rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
 
         rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_pub_;
+
+        bool path_test_done_ = false;
 
         void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
             robot_x_ = msg->pose.pose.position.x;
@@ -57,17 +62,20 @@ class LidarNode : public rclcpp::Node
             
             for(std::size_t i = 0; i < msg->ranges.size(); ++i){
                 const float range = msg->ranges[i];
+                const float theta = angle_min + i * angle_inc;
 
-                if(! std::isfinite(range)){
-                    continue;
-                }
-                if(range < msg->range_min || range > msg->range_max){
+                bool hit_obstacle = true;
+                float used_range = range;
+
+                if (!std::isfinite(range)){
+                    hit_obstacle = false;
+                    used_range = msg->range_max;
+                }else if (range < msg->range_min || range > msg->range_max){
                     continue;
                 }
                 
-                const float theta = angle_min + i * angle_inc;
-                const float x = range * std::cos(theta) + lidar_offset_x_;
-                const float y = range * std::sin(theta) + lidar_offset_y_;
+                const float x = used_range * std::cos(theta) + lidar_offset_x_;
+                const float y = used_range * std::sin(theta) + lidar_offset_y_;
                 // if(printed < 3){
                 //     RCLCPP_INFO(this->get_logger(),"Obstacle point: x=%.2f, y=%.2f",x,y);
                 //     ++printed;
@@ -77,19 +85,26 @@ class LidarNode : public rclcpp::Node
                 const float y_odom = robot_y_ + x*std::sin(robot_theta_) + y*std::cos(robot_theta_);
                 // obstacle.emplace_back(x_odom, y_odom);
 
+                // bool printed = false;
+                // if (!printed){
+                //     RCLCPP_INFO(this->get_logger(), "robot_theta=%.2f, lidar_theta=%.2f, range=%.2f, x_odom=%.2f, y_odom=%.2f", robot_theta_, theta, range, x_odom,y_odom);
+                //     printed = true;
+                // }
+
                 // plot the robot and obstacle in a map with 10m*10m and 0.1m/cell resolution
-                const int col = static_cast<int>((x_odom - origin_x_) / resolution_);
-                const int row = static_cast<int>((y_odom - origin_y_) / resolution_);
+                int col = static_cast<int>((x_odom - origin_x_) / resolution_);
+                int row = static_cast<int>((y_odom - origin_y_) / resolution_);
+                // make sure rol and col stays in range
+                // col = std::clamp(col, 0, width_ - 1);
+                // row = std::clamp(row, 0, height_ - 1);
 
                 const int robot_col = static_cast<int>((robot_x_ - origin_x_) / resolution_);
                 const int robot_row = static_cast<int>((robot_y_ - origin_y_) / resolution_);
 
-                if (row >= 0 && row < height_ &&
-                    col >= 0 && col < width_ &&
-                    robot_row >= 0 && robot_row < height_ &&
+                if (robot_row >= 0 && robot_row < height_ &&
                     robot_col >= 0 && robot_col < width_){
                         
-                    BresenhamLine(robot_col, robot_row, col, row, grid_);
+                    BresenhamLine(robot_col, robot_row, col, row, grid_, hit_obstacle);
                     // obstacle_cells.emplace_back(col, row);
                 }
             }
@@ -100,11 +115,51 @@ class LidarNode : public rclcpp::Node
             // %zu for size_t
 
             // if (!obstacle.empty()){
-            //     RCLCPP_INFO(this->get_logger(), "First odom obstacle: (%d, %d)", obstacle_cells[0].first, obstacle_cells[0].second);
+            //     RCLCPP_INFO(this->get_logger(), "First odom obstacle: (%.1f, %.1f)", obstacle[0].first, obstacle[0].second);
             // }
+
+            // Example: run A* once after the map has some data
+            if (!path_test_done_){
+                const int start_col =
+                    static_cast<int>((robot_x_ - origin_x_) / resolution_);
+
+                const int start_row =
+                    static_cast<int>((robot_y_ - origin_y_) / resolution_);
+
+                // Example goal in odom/world coordinates
+                const double goal_x = 0.0;
+                const double goal_y = 3.0;
+
+                const int goal_col =
+                    static_cast<int>((goal_x - origin_x_) / resolution_);
+
+                const int goal_row =
+                    static_cast<int>((goal_y - origin_y_) / resolution_);
+
+                auto path = planner_.findPath(grid_, start_row, start_col, goal_row,          goal_col);
+
+                if (path.empty()){
+                    RCLCPP_WARN(
+                        this->get_logger(),
+                        "No path found from (%d,%d) to (%d,%d)",
+                        start_row,
+                        start_col,
+                        goal_row,
+                        goal_col
+                    );
+                }
+                else{
+                    RCLCPP_INFO(
+                        this->get_logger(),
+                        "Path found with %zu cells",
+                        path.size()
+                    );
+                    path_test_done_ = true;
+                }
+            }
         }
         
-        void BresenhamLine(int start_col, int start_row, int end_col, int end_row,std::vector<int8_t>& grid){
+        void BresenhamLine(int start_col, int start_row, int end_col, int end_row,std::vector<int8_t>& grid, bool hit_obstacle){
             int x = start_col;
             int y = start_row;
 
@@ -117,20 +172,25 @@ class LidarNode : public rclcpp::Node
             int error = dx - dy;
 
             while (true){
-                // Reached obstacle endpoint
-                if (x == end_col && y == end_row){
-                    const int index = y * width_ + x;
-                    grid[index] = 100;
+                // ray left the map
+                if (x < 0 || x >= width_ || y < 0 || y >= height_){
                     break;
                 }
 
-                // Mark current cell as free
-                if (x >= 0 && x < width_ && y >= 0 && y < height_){
-                    const int index = y * width_ + x;
+                const int index = y * width_ + x;
 
-                    // Don't overwrite an occupied cell
-                    if (grid[index] != 100) grid[index] = 0;
+                // Reached obstacle endpoint
+                if (x == end_col && y == end_row){
+
+                    if (hit_obstacle){
+                        grid[index] = 100;
+                    }else{
+                        grid[index] = 0;
+                    }
+                    break;
                 }
+
+                grid[index] = 0;
 
                 const int e2 = 2 * error;
 
@@ -169,6 +229,8 @@ class LidarNode : public rclcpp::Node
             return map_msg;
         }
         
+        nav_msgs::msg::Path createPathMessage(const std::vector<std::pair<int,int>>& path){}
+
         // parameters
         double robot_x_ = 0.0;
         double robot_y_ = 0.0;
@@ -183,6 +245,7 @@ class LidarNode : public rclcpp::Node
         const int width_  = 100;
         const int height_ = 100;
         std::vector<int8_t> grid_;
+        AStarPlanner planner_;
 };
 
 int main(int argc, char* argv[]){

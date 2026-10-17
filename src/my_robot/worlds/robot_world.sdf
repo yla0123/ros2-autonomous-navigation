@@ -364,7 +364,7 @@
     <model name="test_obstacle">
         <static>true</static>
 
-        <pose>2 0 0.5 0 0 0</pose>
+        <pose>2 2 0.5 0 0 0</pose>
 
         <link name="box_link">
             <collision name="collision">

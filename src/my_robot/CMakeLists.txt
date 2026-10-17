@@ -24,13 +24,19 @@ target_link_libraries(odometry_node
     nav_msgs::nav_msgs
 )
 
-add_executable(lidar_node src/lidar_node.cpp)
+add_executable(lidar_node 
+    src/lidar_node.cpp
+    src/astar_planner.cpp)
 target_link_libraries(lidar_node
     rclcpp::rclcpp
     std_msgs::std_msgs
     geometry_msgs::geometry_msgs
     sensor_msgs::sensor_msgs
     nav_msgs::nav_msgs
+)
+target_include_directories(lidar_node
+  PRIVATE
+  include
 )
 
 install(

@@ -70,4 +70,4 @@ def generate_launch_description():
     )
 
 
-    return LaunchDescription([bridge, odometry_node, ekf_node])
+    return LaunchDescription([bridge, odometry_node, ekf_node, gazebo])
