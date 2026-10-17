@@ -10,8 +10,14 @@ AStarPlanner::AStarPlanner(int width, int height)
     }
 
 std::vector<std::pair<int, int>> AStarPlanner::findPath(const std::vector<int8_t>& grid, 
-    const int start_row, const int start_col, const int goal_row, const int goal_col){
+    const std::pair<int,int>& start_cell, const std::pair<int,int>& goal_cell){
         std::vector<std::pair<int,int>> path;
+
+        const int start_row = start_cell.first;
+        const int start_col = start_cell.second;
+
+        const int goal_row = goal_cell.first;
+        const int goal_col = goal_cell.second;
 
         // Check if start and goal are valid
         if (!isTraversable(grid, start_row, start_col)|| 
@@ -30,8 +36,8 @@ std::vector<std::pair<int, int>> AStarPlanner::findPath(const std::vector<int8_t
         AStarNode start;
         start.row = start_row;
         start.col = start_col;
-        start.cost = 0;
-        start.est_cost = calDistance(start_row, start_col, goal_row, goal_col);
+        start.g_cost = 0;
+        start.h_cost = calDistance(start_row, start_col, goal_row, goal_col);
         open_set.push(start);
 
         // 4 directions
@@ -43,7 +49,7 @@ std::vector<std::pair<int, int>> AStarPlanner::findPath(const std::vector<int8_t
             open_set.pop();
 
             if(current.row == goal_row && current.col == goal_col){
-                return reconstructPath(parents, start_row, start_col, goal_row, goal_col);
+                return reconstructPath(parents, start_cell, goal_cell);
             }
 
             //check 4 directions
@@ -54,7 +60,7 @@ std::vector<std::pair<int, int>> AStarPlanner::findPath(const std::vector<int8_t
                 if(!isTraversable(grid, next_row, next_col)){
                     continue;
                 }
-                double next_cost = current.cost + 1.0;
+                double next_cost = current.g_cost + 1.0;
                 int next_id = next_row * width_ + next_col;
 
                 if(next_cost < cost_map[next_id]){
@@ -66,8 +72,8 @@ std::vector<std::pair<int, int>> AStarPlanner::findPath(const std::vector<int8_t
                     AStarNode next;
                     next.row = next_row;
                     next.col = next_col;
-                    next.cost = next_cost;
-                    next.est_cost = calDistance(next_row, next_col, goal_row, goal_col);
+                    next.g_cost = next_cost;
+                    next.h_cost = calDistance(next_row, next_col, goal_row, goal_col);
                     open_set.push(next);
                 }
             }
@@ -79,7 +85,13 @@ std::vector<std::pair<int, int>> AStarPlanner::findPath(const std::vector<int8_t
 
 std::vector<std::pair<int, int>> AStarPlanner::reconstructPath(
     const std::vector<std::pair<int, int>>& parents,
-    int start_row, int start_col, int goal_row, int goal_col)const{
+    const std::pair<int,int>& start_cell, const std::pair<int,int>& goal_cell)const{
+
+        const int start_row = start_cell.first;
+        const int start_col = start_cell.second;
+
+        const int goal_row = goal_cell.first;
+        const int goal_col = goal_cell.second;
 
         std::vector<std::pair<int,int>> path;
         std::pair<int, int> current = std::pair<int, int>{goal_row, goal_col};
@@ -114,7 +126,7 @@ double AStarPlanner::calDistance(int row, int col, int goal_row, int goal_col) c
 }
 
 bool CompareAStarNode::operator()(const AStarNode& a, const AStarNode& b) const{
-    return (a.cost+a.est_cost > b.cost+b.est_cost);
+    return (a.g_cost+a.h_cost > b.g_cost+b.h_cost);
     // return true if a cost more than b
 }
 

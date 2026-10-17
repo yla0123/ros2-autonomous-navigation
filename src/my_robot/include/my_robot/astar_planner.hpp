@@ -8,8 +8,7 @@ class AStarPlanner{
 public:
     AStarPlanner(int width, int height);
 
-    std::vector<std::pair<int, int>> findPath(const std::vector<int8_t>& grid, 
-    const int start_row, const int start_col, const int goal_row, const int goal_col);
+    std::vector<std::pair<int, int>> findPath(const std::vector<int8_t>& grid, const   std::pair<int,int>& start_cell, const std::pair<int,int>& goal_cell);
 
 private:
     int width_;
@@ -23,10 +22,8 @@ private:
 
     std::vector<std::pair<int, int>> reconstructPath(
         const std::vector<std::pair<int, int>>& parents,
-        int start_row,
-        int start_col,
-        int goal_row,
-        int goal_col
+        const std::pair<int,int>& start_cell, 
+        const std::pair<int,int>& goal_cell
     ) const;
 };
 
@@ -34,8 +31,8 @@ struct AStarNode{
     int row;
     int col;
 
-    double cost; // cost from start to curr
-    double est_cost; // estimated cost from curr to goal
+    double g_cost; // cost from start to current cell
+    double h_cost; // estimated cost from current cell to goal
 };
 
 struct CompareAStarNode{
