@@ -51,6 +51,12 @@ def generate_launch_description():
         output = "screen",
         parameters = [{"use_sim_time": True}],
     )
+    lidar_node = Node(
+        package='my_robot',
+        executable='lidar_node',
+        name='lidar_node',
+        output='screen'
+    )
 
     ekf_node = Node(        
         package="robot_localization",
@@ -70,4 +76,4 @@ def generate_launch_description():
     )
 
 
-    return LaunchDescription([bridge, odometry_node, ekf_node, gazebo])
+    return LaunchDescription([gazebo, bridge, odometry_node, ekf_node, lidar_node])

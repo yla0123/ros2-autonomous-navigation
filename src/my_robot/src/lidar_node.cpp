@@ -25,7 +25,9 @@ class LidarNode : public rclcpp::Node
 
             map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", 10);
 
-            path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/planned_path", 10);
+            //keep the latest message.
+            auto path_qos = rclcpp::QoS(1).transient_local();
+            path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/planned_path", path_qos);
         }
 
     private:

@@ -39,8 +39,15 @@ target_include_directories(lidar_node
   include
 )
 
+add_executable(path_follower_node src/path_follower_node.cpp)
+target_link_libraries(path_follower_node
+    rclcpp::rclcpp
+    geometry_msgs::geometry_msgs
+    nav_msgs::nav_msgs
+)
+
 install(
-    TARGETS odometry_node lidar_node
+    TARGETS odometry_node lidar_node path_follower_node
     DESTINATION lib/${PROJECT_NAME}
 )
 
