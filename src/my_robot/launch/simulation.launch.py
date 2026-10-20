@@ -16,6 +16,7 @@ def generate_launch_description():
 
     package_share = get_package_share_directory("my_robot")
     ekf_config = os.path.join(package_share, "config", "ekf.yaml")
+    path_follower_config = os.path.join(get_package_share_directory('my_robot'), 'config', 'path_follower.yaml')
     joint_state_gz_topic = ("/world/robot_world/model/mobile_robot/joint_state")
 
     bridge = Node(
@@ -55,9 +56,15 @@ def generate_launch_description():
         package='my_robot',
         executable='lidar_node',
         name='lidar_node',
-        output='screen'
+        output='screen',
     )
-
+    path_follower_node = Node(
+        package='my_robot',
+        executable='path_follower_node',
+        name='path_follower_node',
+        output='screen',
+        parameters=[path_follower_config],
+    )
     ekf_node = Node(        
         package="robot_localization",
         executable="ekf_node",
@@ -76,4 +83,4 @@ def generate_launch_description():
     )
 
 
-    return LaunchDescription([gazebo, bridge, odometry_node, ekf_node, lidar_node])
+    return LaunchDescription([gazebo, bridge, odometry_node, ekf_node, lidar_node, path_follower_node])

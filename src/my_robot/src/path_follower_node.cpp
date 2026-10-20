@@ -19,19 +19,17 @@ class PathFollowerNode : public rclcpp::Node{
             control_timer_ = this->create_wall_timer(
                     std::chrono::milliseconds(50),
                     std::bind(&PathFollowerNode::controlLoop, this)); //run control loop in 20Hz
+
+            // Delcare parameters
+            kp_angular_ = this->declare_parameter<double>("kp_angular", 1.5);
+            max_angular_vel_ = this->declare_parameter<double>("max_angular_vel", 1.0);
+            max_linear_vel_ = this->declare_parameter<double>("max_linear_vel", 0.6);
+            lookahead_distance_ = this->declare_parameter<double>("lookahead_distance", 0.4);
+            goal_tolerance_ = this->declare_parameter<double>("goal_tolerance",0.10);
+            slow_down_distance_ = this->declare_parameter<double>("slow_down_distance",0.6);
         }
 
     private:
-        // parameters
-        static constexpr double LOOKAHEAD_DISTANCE = 0.4;
-        static constexpr double SLOW_DOWN_DISTANCE = 0.5;
-        static constexpr double GOAL_TOLERANCE = 0.10;
-
-        static constexpr double KP_ANGULAR = 1.5;
-
-        static constexpr double MAX_ANGULAR_VEL = 1.0;
-        static constexpr double MAX_LINEAR_VEL = 0.6;
-
         rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
         rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
         rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr vel_pub_;
@@ -41,7 +39,11 @@ class PathFollowerNode : public rclcpp::Node{
         void pathCallback(const nav_msgs::msg::Path::SharedPtr msg){
             current_path_ = *msg;
             waypoint_index_ = 0;
-            if (!current_path_.poses.empty()) received_path_ = true;
+            if (!current_path_.poses.empty()){
+                received_path_ = true;
+                RCLCPP_INFO(this->get_logger(), "Path received");
+            }
+            
         }
         void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
             robot_x_ = msg->pose.pose.position.x;
@@ -61,7 +63,7 @@ class PathFollowerNode : public rclcpp::Node{
             // Check for goal first
             const double goal_distance = findDistance(current_path_, current_path_.poses.size()-1);
 
-            if (goal_distance < GOAL_TOLERANCE){
+            if (goal_distance < goal_tolerance_){
                 geometry_msgs::msg::Twist cmd;
                 vel_pub_->publish(cmd);
                 waypoint_index_ = current_path_.poses.size();
@@ -102,7 +104,7 @@ class PathFollowerNode : public rclcpp::Node{
                 accumulated_distance += std::sqrt(dx * dx + dy * dy);
                 target_index = i + 1;
 
-                if (accumulated_distance >= LOOKAHEAD_DISTANCE) {
+                if (accumulated_distance >= lookahead_distance_) {
                     break;
                 }
             }
@@ -117,19 +119,18 @@ class PathFollowerNode : public rclcpp::Node{
             theta_error = std::atan2(std::sin(theta_error), std::cos(theta_error));
             //normalize to [-π, π]
             
-            double ang_vel = KP_ANGULAR * theta_error;
-            ang_vel = std::clamp(ang_vel, -MAX_ANGULAR_VEL, MAX_ANGULAR_VEL);
+            double ang_vel = kp_angular_ * theta_error;
+            ang_vel = std::clamp(ang_vel, -max_angular_vel_, max_angular_vel_);
 
             // Reduce forward velocity when the robot is not pointing toward the target / when the robot is close to the goal.
             const double heading_scale = std::max(0.0, std::cos(theta_error));
-            double goal_scale = std::clamp(goal_distance / SLOW_DOWN_DISTANCE, 0.0, 1.0);
+            double goal_scale = std::clamp(goal_distance / slow_down_distance_, 0.0, 1.0);
 
-            double lin_vel = MAX_LINEAR_VEL * heading_scale * goal_scale;
+            double lin_vel = max_linear_vel_ * heading_scale * goal_scale;
 
             geometry_msgs::msg::Twist cmd;
             cmd.angular.z = ang_vel;
             cmd.linear.x = lin_vel;
-
             vel_pub_->publish(cmd);
         }
 
@@ -150,6 +151,13 @@ class PathFollowerNode : public rclcpp::Node{
         std::size_t waypoint_index_ = 0;
         bool received_path_ = false;
         bool received_odom_ = false;
+
+        double kp_angular_;
+        double max_angular_vel_;
+        double max_linear_vel_;
+        double lookahead_distance_;
+        double goal_tolerance_;
+        double slow_down_distance_;
 };
 
 int main(int argc, char* argv[]){

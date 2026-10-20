@@ -3,6 +3,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 
 #include "my_robot/astar_planner.hpp"
 
@@ -16,6 +17,9 @@ class LidarNode : public rclcpp::Node
         LidarNode() : Node("lidar_node"), planner_(width_, height_)
         {
             grid_.assign(width_ * height_, -1);
+
+            goal_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>
+            ("goal_pose", 10, std::bind(&LidarNode::goalCallback, this, std::placeholders::_1));
 
             lidar_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>
             ("/scan", 10, std::bind(&LidarNode::scanCallback, this, std::placeholders::_1));
@@ -31,6 +35,8 @@ class LidarNode : public rclcpp::Node
         }
 
     private:
+        rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
+
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_sub_;
 
         rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
@@ -39,8 +45,20 @@ class LidarNode : public rclcpp::Node
 
         rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
 
-        bool path_test_done_ = false;
+        void goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg){
+                goal_x_ = msg->pose.position.x;
+                goal_y_ = msg->pose.position.y;
 
+                received_goal_ = true;
+                replan_requested_ = true;
+
+                RCLCPP_INFO(
+                    this->get_logger(),
+                    "New goal received: x=%.2f, y=%.2f",
+                    goal_x_,
+                    goal_y_
+                );
+        }
         void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
             robot_x_ = msg->pose.pose.position.x;
             robot_y_ = msg->pose.pose.position.y;
@@ -120,18 +138,22 @@ class LidarNode : public rclcpp::Node
             //     RCLCPP_INFO(this->get_logger(), "First odom obstacle: (%.1f, %.1f)", obstacle[0].first, obstacle[0].second);
             // }
 
-            // Example: run A* once after the map has some data
-            if (!path_test_done_){
+            // Planner
+
+            if (received_goal_ && replan_requested_){
                 std::pair<int,int> robot_cell = worldToGrid(robot_x_, robot_y_);
 
-                // Example goal in odom/world coordinates
-                const double goal_x = 0.0;
-                const double goal_y = 3.0;
-                std::pair<int,int> goal_cell = worldToGrid(goal_x, goal_y);
+                std::pair<int,int> goal_cell = worldToGrid(goal_x_, goal_y_);
 
                 auto path = planner_.findPath(grid_, robot_cell, goal_cell);
 
-                if (path.empty()){
+                if(!path.empty()){
+                    auto path_msg = createPathMessage(path);
+                    path_pub_->publish(path_msg);
+                    replan_requested_ = false;
+
+                    RCLCPP_INFO(this->get_logger(), "Path found!");
+                }else{
                     RCLCPP_WARN(
                         this->get_logger(),
                         "No path found from (%d,%d) to (%d,%d)",
@@ -141,19 +163,8 @@ class LidarNode : public rclcpp::Node
                         goal_cell.second
                     );
                 }
-                else{
-                    RCLCPP_INFO(
-                        this->get_logger(),
-                        "Path found with %zu cells",
-                        path.size()
-                    );
-
-                    nav_msgs::msg::Path path_msg = createPathMessage(path);
-                    path_pub_->publish(path_msg);
-
-                    path_test_done_ = true;
-                }
             }
+
         }
         
         void BresenhamLine(const std::pair<int,int>& start_cell, const std::pair<int,int>& end_cell, std::vector<int8_t>& grid, bool hit_obstacle){
@@ -264,6 +275,9 @@ class LidarNode : public rclcpp::Node
         double robot_y_ = 0.0;
         double robot_theta_ = 0.0;
 
+        double goal_x_ = 0.0;
+        double goal_y_ = 0.0;
+
         const double lidar_offset_x_ = 0.2;
         const double lidar_offset_y_ = 0.0;
 
@@ -274,6 +288,9 @@ class LidarNode : public rclcpp::Node
         const int height_ = 100;
         std::vector<int8_t> grid_;
         AStarPlanner planner_;
+
+        bool received_goal_ = false;
+        bool replan_requested_ = false;
 };
 
 int main(int argc, char* argv[]){

@@ -1,0 +1,10 @@
+path_follower_node:
+  ros__parameters:
+    kp_angular: 1.3
+    max_angular_vel: 1.0
+    max_linear_vel: 0.6
+
+    lookahead_distance: 0.4
+
+    goal_tolerance: 0.10
+    slow_down_distance: 0.6
