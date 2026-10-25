@@ -18,14 +18,20 @@ class LidarNode : public rclcpp::Node
         {
             grid_.assign(width_ * height_, -1);
 
+            // create_subscription<MessageType>(topic_name, queue_size, callback)
             goal_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>
             ("goal_pose", 10, std::bind(&LidarNode::goalCallback, this, std::placeholders::_1));
 
+            odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>
+            ("/odometry/filtered", 10, std::bind(&LidarNode::odomCallback, this, std::placeholders::_1));
+
             lidar_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>
             ("/scan", 10, std::bind(&LidarNode::scanCallback, this, std::placeholders::_1));
-            // create_subscription<MessageType>(topic_name, queue_size, callback)
-
-            odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>("/odometry/filtered", 10, std::bind(&LidarNode::odomCallback, this, std::placeholders::_1));
+            
+            // replan every 0.5s
+            plan_timer_ = this->create_wall_timer(
+                std::chrono::milliseconds(500),
+                std::bind(&LidarNode::planCallback, this));
 
             map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", 10);
 
@@ -35,6 +41,8 @@ class LidarNode : public rclcpp::Node
         }
 
     private:
+        rclcpp::TimerBase::SharedPtr plan_timer_;    
+
         rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
 
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_sub_;
@@ -59,6 +67,7 @@ class LidarNode : public rclcpp::Node
                     goal_y_
                 );
         }
+        
         void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
             robot_x_ = msg->pose.pose.position.x;
             robot_y_ = msg->pose.pose.position.y;
@@ -137,36 +146,25 @@ class LidarNode : public rclcpp::Node
             // if (!obstacle.empty()){
             //     RCLCPP_INFO(this->get_logger(), "First odom obstacle: (%.1f, %.1f)", obstacle[0].first, obstacle[0].second);
             // }
-
-            // Planner
-
-            if (received_goal_ && replan_requested_){
-                std::pair<int,int> robot_cell = worldToGrid(robot_x_, robot_y_);
-
-                std::pair<int,int> goal_cell = worldToGrid(goal_x_, goal_y_);
-
-                auto path = planner_.findPath(grid_, robot_cell, goal_cell);
-
-                if(!path.empty()){
-                    auto path_msg = createPathMessage(path);
-                    path_pub_->publish(path_msg);
-                    replan_requested_ = false;
-
-                    RCLCPP_INFO(this->get_logger(), "Path found!");
-                }else{
-                    RCLCPP_WARN(
-                        this->get_logger(),
-                        "No path found from (%d,%d) to (%d,%d)",
-                        robot_cell.first,
-                        robot_cell.second,
-                        goal_cell.first,
-                        goal_cell.second
-                    );
-                }
-            }
-
         }
         
+        void planCallback(){
+            if(!received_goal_) return;
+
+            std::pair<int,int> robot_cell = worldToGrid(robot_x_, robot_y_);
+
+            std::pair<int,int> goal_cell = worldToGrid(goal_x_, goal_y_);
+
+            // find the path using inflated grid
+            auto inflated_grid = inflateObstacles(grid_);
+            auto path = planner_.findPath(inflated_grid, robot_cell, goal_cell);
+
+            if(!path.empty()){
+                auto path_msg = createPathMessage(path);
+                path_pub_->publish(path_msg);
+            }
+        }
+
         void BresenhamLine(const std::pair<int,int>& start_cell, const std::pair<int,int>& end_cell, std::vector<int8_t>& grid, bool hit_obstacle){
 
             int x = start_cell.second;
@@ -213,6 +211,45 @@ class LidarNode : public rclcpp::Node
                     y += sy;
                 }
             }
+        }
+
+        std::vector<int8_t> inflateObstacles(const std::vector<int8_t>& grid){
+            std::vector<int8_t> inflated_grid = grid;
+            
+            // mark the cells around obstacle
+            const int inflation_cells = static_cast<int>( std::ceil(inflation_radius_ / resolution_));
+
+            for(int row = 0; row < height_; ++row){
+                for(int col = 0; col < width_; ++col){
+
+                    const int index = row * width_ + col;
+                    if(grid[index] != 100) continue;
+
+                    for(int dr = -inflation_cells; dr <= inflation_cells; ++dr){
+                        for(int dc = -inflation_cells; dc <= inflation_cells; ++dc){
+
+                            int inflat_row = row + dr;
+                            int inflat_col = col + dc;
+                            
+                            if(!isValidCell(inflat_row, inflat_col)) continue;
+                            
+                            // circular inflation
+                            if(dr*dr + dc*dc <= inflation_cells*inflation_cells){
+                                int inflat_id = inflat_row * width_ + inflat_col;
+                                inflated_grid[inflat_id] = 100;
+                            }
+                        }
+                    }
+                }
+            }
+            return inflated_grid;
+        }
+
+        bool isValidCell(int row, int col) const{
+            if(row < 0 || row >= height_) return false;
+            if(col < 0 || col >= width_ ) return false;
+
+            return true;
         }
 
         std::pair<int,int> worldToGrid(double x, double y) const {
@@ -291,6 +328,8 @@ class LidarNode : public rclcpp::Node
 
         bool received_goal_ = false;
         bool replan_requested_ = false;
+
+        double inflation_radius_ = 0.50;
 };
 
 int main(int argc, char* argv[]){

@@ -60,7 +60,7 @@ std::vector<std::pair<int, int>> AStarPlanner::findPath(const std::vector<int8_t
                 if(!isTraversable(grid, next_row, next_col)){
                     continue;
                 }
-                double next_cost = current.g_cost + 1.0;
+                double next_cost = current.g_cost + traversalCost(grid, next_row, next_col);
                 int next_id = next_row * width_ + next_col;
 
                 if(next_cost < cost_map[next_id]){
@@ -118,7 +118,15 @@ bool AStarPlanner::isTraversable(const std::vector<int8_t>& grid, int row, int c
 
     int id = row * width_ + col;
 
-    return (grid[id] == 0);
+    return (grid[id] != 100);
+}
+
+double AStarPlanner::traversalCost(const std::vector<int8_t>& grid, int row, int col) const{
+    int id = row * width_ + col;
+
+    if(grid[id] == -1) return 3.0; // give unknown cell higher cost
+    
+    return 1.0;
 }
 
 double AStarPlanner::calDistance(int row, int col, int goal_row, int goal_col) const{

@@ -41,7 +41,7 @@ class PathFollowerNode : public rclcpp::Node{
             waypoint_index_ = 0;
             if (!current_path_.poses.empty()){
                 received_path_ = true;
-                RCLCPP_INFO(this->get_logger(), "Path received");
+                //RCLCPP_INFO(this->get_logger(), "Path received");
             }
             
         }
@@ -71,7 +71,7 @@ class PathFollowerNode : public rclcpp::Node{
                 return;
             }
 
-            // Check the closest cell
+            // Find the closest cell on the path
             if (waypoint_index_ >= current_path_.poses.size()) {
                 waypoint_index_ = current_path_.poses.size() - 1;
             }

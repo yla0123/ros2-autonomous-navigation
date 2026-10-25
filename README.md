@@ -1,70 +1,118 @@
 # ROS2 Autonomous Navigation Robot
 
-This project develops an autonomous mobile robot in ROS 2 and C++. The goal is to move from sensor data and state estimation to safe, closed-loop navigation: build a local map, plan a route around obstacles, and command the robot to follow that route.
+A simulation-first autonomous mobile robot built with **ROS 2 and C++**.
 
-## Current status
+The project implements a classical navigation pipeline using LiDAR, EKF state estimation, occupancy-grid mapping, A* global planning, periodic replanning, and closed-loop path following in Gazebo.
 
-The current system delivers occupancy-grid mapping and A* global planning. It has been tested in both open space and a scene containing a mapped obstacle.
+## Current Status
 
-- LiDAR scans are converted into a local `nav_msgs/msg/OccupancyGrid`.
-- Grid cells represent unknown, free, and occupied space.
-- Filtered EKF odometry supplies the robot pose used to place scans in the map.
-- Stale or missing filtered odometry causes scans to be skipped, preventing mapping with an old pose.
-- An A* planner searches the occupancy grid for a collision-free route.
-- The resulting `nav_msgs/msg/Path` is published for RViz visualization.
+The robot can receive a navigation goal, build and update an occupancy grid from LiDAR data, plan a route with A*, and follow the path using a lookahead controller. The planner periodically replans using the latest robot pose and map, allowing the path to update as previously unknown space becomes visible.
 
-## Architecture
+Unknown cells are traversable with a higher cost than known free cells, while occupied cells remain blocked.
 
-```text
-LiDAR (/scan) + EKF odometry (/odometry/filtered)
-                    |
-                    v
-          Occupancy-grid mapper (/map)
-                    |
-                    v
-        A* global planner (/planned_path)
-                    |
-                    v
-              RViz visualization
-```
-
-### Key ROS 2 interfaces
+## Key ROS 2 Interfaces
 
 | Topic | Type | Purpose |
 | --- | --- | --- |
 | `/scan` | `sensor_msgs/msg/LaserScan` | LiDAR range measurements |
-| `/odometry/filtered` | `nav_msgs/msg/Odometry` | EKF-filtered pose estimate |
-| `/map` | `nav_msgs/msg/OccupancyGrid` | Local obstacle/free-space grid |
-| `/planned_path` | `nav_msgs/msg/Path` | A* global path for visualization and future tracking |
+| `/imu` | `sensor_msgs/msg/Imu` | IMU measurements |
+| `/odom` | `nav_msgs/msg/Odometry` | Custom wheel odometry |
+| `/odometry/filtered` | `nav_msgs/msg/Odometry` | EKF-filtered state estimate |
+| `/map` | `nav_msgs/msg/OccupancyGrid` | Occupancy-grid map |
+| `/goal_pose` | `geometry_msgs/msg/PoseStamped` | Navigation goal |
+| `/planned_path` | `nav_msgs/msg/Path` | Current A* global path |
+| `/cmd_vel` | `geometry_msgs/msg/Twist` | Linear and angular velocity commands |
 
-## Mapping and planning
+## Mapping and Planning
 
-Each incoming LiDAR scan is transformed using the latest filtered robot pose. Ray-tracing marks traversed cells as free and scan endpoints as occupied, while cells that have not been observed remain unknown. Before a scan is processed, the mapper verifies that filtered odometry has been received and is no more than approximately 0.5 seconds old.
+LiDAR measurements are transformed into the odometry frame using the latest EKF pose estimate. Ray tracing marks observed free space and obstacle endpoints in a persistent occupancy grid.
 
-The planner converts start and goal positions into grid cells, runs A* over traversable cells, and publishes the recovered route as a ROS 2 path. This separates perception and planning cleanly and provides a useful foundation for motion control.
+The custom C++ A* planner converts the robot and goal positions into grid coordinates and searches for a route. Known free cells are preferred, unknown cells receive a higher traversal cost, and occupied cells are blocked.
 
-## Running the project
+Planning runs periodically so the route can change as the robot moves and the map is updated.
 
-1. Build the ROS 2 workspace with `colcon build` and source the workspace.
-2. Start the robot or simulator, LiDAR publisher, and EKF odometry source.
-3. Launch the mapping and planning nodes.
-4. Open RViz and display the occupancy grid and planned path.
-5. Set or provide a planning goal and inspect the resulting route.
+## Path Following
 
-Launch-file names and parameter details will be documented as the project is consolidated.
+The robot follows `/planned_path` using a lookahead-based controller instead of attempting to visit every individual A* grid cell.
 
-## Current limitations
+The controller tracks progress along the path, selects a target farther ahead, and uses proportional heading control to generate angular velocity. Forward speed is reduced when the robot is poorly aligned with the path and when approaching the final goal.
 
-- The path is visualized only; the robot does not yet drive along it.
-- Mapping and planning depend on timely, accurate EKF odometry.
-- The planner is a basic global A* implementation; it does not yet include path smoothing, local obstacle avoidance, or replanning during motion.
-- Obstacle scenarios are currently controlled rather than procedurally generated.
+This produces smoother motion than repeatedly stopping and rotating at each waypoint.
+
+## Running the Project
+
+Build the workspace:
+
+```bash
+cd ~/ros2_ws
+colcon build --packages-select my_robot
+source install/setup.bash
+```
+
+Launch the simulation and navigation stack:
+
+```bash
+ros2 launch my_robot simulation.launch.py
+```
+
+Gazebo starts automatically with the simulation running.
+
+### Send a Navigation Goal
+
+For example, send the robot to:
+
+```text
+x = 3.0 m
+y = 3.0 m
+```
+
+using:
+
+```bash
+ros2 topic pub /goal_pose geometry_msgs/msg/PoseStamped \
+"{header: {frame_id: 'odom'}, pose: {position: {x: 3.0, y: 3.0, z: 0.0}, orientation: {w: 1.0}}}" \
+--once
+```
+
+The planner will generate a path from the robot's current location to the requested goal and publish it on:
+
+```text
+/planned_path
+```
+
+The path follower then automatically generates velocity commands on:
+
+```text
+/cmd_vel
+```
+
+### RViz
+
+When running under WSL, RViz can be started with:
+
+```bash
+QT_QPA_PLATFORM=xcb rviz2
+```
+
+Useful displays include:
+
+```text
+Fixed Frame: odom
+
+Map:
+    /map
+
+Path:
+    /planned_path
+```
+
+## Current Limitations
+
+The planner currently treats the robot as a point, so planned paths do not yet account for the physical size of the chassis. The occupancy map also uses a simple free/occupied representation, and local dynamic-obstacle avoidance is not yet implemented.
 
 ## Planned additions
 
-- Closed-loop path following that converts `/planned_path` into `/cmd_vel` commands.
-- Local obstacle handling, safe stopping behavior, and replanning while moving.
-- Path smoothing, parameter tuning, recovery behavior, and testing across more scenarios.
+- Implementing obstacle inflation, followed by navigation testing.
 - Full system integration, documentation, and demonstrations.
 - Random obstacle generation for broader simulation testing (stretch goal).
 

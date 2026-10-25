@@ -18,6 +18,8 @@ private:
 
     bool isTraversable(const std::vector<int8_t>& grid, int row, int col) const;
 
+    double traversalCost(const std::vector<int8_t>& grid, int row, int col) const;
+
     double calDistance(int row, int col, int goal_row, int goal_col) const;
 
     std::vector<std::pair<int, int>> reconstructPath(
