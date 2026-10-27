@@ -133,6 +133,14 @@ class LidarNode : public rclcpp::Node
         void planCallback(){
             if(!received_goal_) return;
 
+            if(!replan_requested_){
+                const double distance_since_last_plan = std::hypot(
+                robot_x_ - last_plan_x_, robot_y_ - last_plan_y_);
+                
+                // only replan when we moved over replan distance
+                if (distance_since_last_plan < replan_distance_) return;
+            }
+
             std::pair<int,int> robot_cell = worldToGrid(robot_x_, robot_y_);
 
             std::pair<int,int> goal_cell = worldToGrid(goal_x_, goal_y_);
@@ -145,6 +153,9 @@ class LidarNode : public rclcpp::Node
                 auto path_msg = createPathMessage(path);
                 path_pub_->publish(path_msg);
             }
+            last_plan_x_ = robot_x_;
+            last_plan_y_ = robot_y_;
+            replan_requested_ = false;
         }
 
         void BresenhamLine(const std::pair<int,int>& start_cell, const std::pair<int,int>& end_cell, std::vector<int8_t>& grid, bool hit_obstacle){
@@ -317,7 +328,11 @@ class LidarNode : public rclcpp::Node
         bool received_goal_ = false;
         bool replan_requested_ = false;
 
-        double inflation_radius_ = 0.50;
+        double inflation_radius_ = 0.65;
+
+        double replan_distance_ = 0.20;
+        double last_plan_x_ = 0.0;
+        double last_plan_y_ = 0.0;
 };
 
 int main(int argc, char* argv[]){

@@ -125,7 +125,7 @@ class PathFollowerNode : public rclcpp::Node{
 
                 const double dx = next.x - current.x;
                 const double dy = next.y - current.y;
-                accumulated_distance += std::sqrt(dx * dx + dy * dy);
+                accumulated_distance += std::hypot(dx, dy);
                 target_index = i + 1;
 
                 if (accumulated_distance >= lookahead_distance_) {
@@ -162,8 +162,7 @@ class PathFollowerNode : public rclcpp::Node{
             const auto& point = path.poses[index].pose.position;
             const double dx = point.x - robot_x_;
             const double dy = point.y - robot_y_;
-            const double distance = std::sqrt(dx * dx + dy * dy);
-
+            const double distance = std::hypot(dx, dy);
             return distance;
         }
 
