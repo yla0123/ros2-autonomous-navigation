@@ -60,12 +60,8 @@ class LidarNode : public rclcpp::Node
                 received_goal_ = true;
                 replan_requested_ = true;
 
-                RCLCPP_INFO(
-                    this->get_logger(),
-                    "New goal received: x=%.2f, y=%.2f",
-                    goal_x_,
-                    goal_y_
-                );
+                // RCLCPP_INFO(this->get_logger(),"New goal received: x=%.2f, y=%.2f",
+                //     goal_x_, goal_y_);
         }
         
         void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
@@ -76,13 +72,6 @@ class LidarNode : public rclcpp::Node
             double w = msg->pose.pose.orientation.w;
 
             robot_theta_ = 2.0 * std::atan2(z, w);
-            // RCLCPP_INFO(
-            //     this->get_logger(),
-            //     "Robot pose: x=%.2f, y=%.2f, theta=%.2f",
-            //     robot_x_,
-            //     robot_y_,
-            //     robot_theta_
-            // );
         }
 
         void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg){
@@ -117,14 +106,7 @@ class LidarNode : public rclcpp::Node
                 const float x_odom = lidar_x_odom + used_range * std::cos(world_angle);
 
                 const float y_odom = lidar_y_odom + used_range * std::sin(world_angle);
-
                 // obstacle.emplace_back(x_odom, y_odom);
-
-                // bool printed = false;
-                // if (!printed){
-                //     RCLCPP_INFO(this->get_logger(), "robot_theta=%.2f, lidar_theta=%.2f, range=%.2f, x_odom=%.2f, y_odom=%.2f", robot_theta_, theta, range, x_odom,y_odom);
-                //     printed = true;
-                // }
 
                 // plot the robot and obstacle in a map with 10m*10m and 0.1m/cell resolution
                 std::pair<int,int> obstacle_cell = worldToGrid(x_odom, y_odom);
@@ -302,6 +284,12 @@ class LidarNode : public rclcpp::Node
                 temp.pose.orientation.w = 1;
 
                 msg.poses.push_back(temp);
+            }
+
+            // overwrite the final path with our goal
+            if(!msg.poses.empty()){
+                msg.poses.back().pose.position.x = goal_x_;
+                msg.poses.back().pose.position.y = goal_y_;
             }
 
             return msg;

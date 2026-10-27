@@ -10,15 +10,14 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 # =============================================
 add_executable(odometry_node src/odometry_node.cpp)
 target_link_libraries(odometry_node
     rclcpp::rclcpp
-    std_msgs::std_msgs
     geometry_msgs::geometry_msgs
     sensor_msgs::sensor_msgs
     nav_msgs::nav_msgs
@@ -29,7 +28,6 @@ add_executable(lidar_node
     src/astar_planner.cpp)
 target_link_libraries(lidar_node
     rclcpp::rclcpp
-    std_msgs::std_msgs
     geometry_msgs::geometry_msgs
     sensor_msgs::sensor_msgs
     nav_msgs::nav_msgs
@@ -44,10 +42,19 @@ target_link_libraries(path_follower_node
     rclcpp::rclcpp
     geometry_msgs::geometry_msgs
     nav_msgs::nav_msgs
+    std_msgs::std_msgs
+)
+
+add_executable(evaluation_node src/evaluation_node.cpp)
+target_link_libraries(evaluation_node
+    rclcpp::rclcpp
+    geometry_msgs::geometry_msgs
+    nav_msgs::nav_msgs
+    std_msgs::std_msgs
 )
 
 install(
-    TARGETS odometry_node lidar_node path_follower_node
+    TARGETS odometry_node lidar_node path_follower_node evaluation_node
     DESTINATION lib/${PROJECT_NAME}
 )
 

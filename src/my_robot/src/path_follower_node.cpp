@@ -1,6 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -14,7 +15,11 @@ class PathFollowerNode : public rclcpp::Node{
 
             odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>("/odometry/filtered",10 ,std::bind(&PathFollowerNode::odomCallback, this, std::placeholders::_1));
 
+            goal_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("/goal_pose", 10, std::bind(&PathFollowerNode::goalCallback, this,std::placeholders::_1));
+
             vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
+
+            goal_reached_pub_ = this->create_publisher<std_msgs::msg::Bool>("/goal_reached", 10);
 
             control_timer_ = this->create_wall_timer(
                     std::chrono::milliseconds(50),
@@ -32,7 +37,11 @@ class PathFollowerNode : public rclcpp::Node{
     private:
         rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
         rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+        rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
+
         rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr vel_pub_;
+        rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr goal_reached_pub_;
+
         rclcpp::TimerBase::SharedPtr control_timer_;
 
         // callbacks
@@ -42,8 +51,14 @@ class PathFollowerNode : public rclcpp::Node{
             if (!current_path_.poses.empty()){
                 received_path_ = true;
                 //RCLCPP_INFO(this->get_logger(), "Path received");
-            }
-            
+            }           
+        }
+        void goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr /*msg*/){
+            goal_reached_published_ = false;
+            // Old path is no longer valid for the new goal
+            received_path_ = false;
+            current_path_.poses.clear();
+            waypoint_index_ = 0;
         }
         void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
             robot_x_ = msg->pose.pose.position.x;
@@ -68,6 +83,15 @@ class PathFollowerNode : public rclcpp::Node{
                 vel_pub_->publish(cmd);
                 waypoint_index_ = current_path_.poses.size();
 
+                if(!goal_reached_published_){
+                    std_msgs::msg::Bool msg;
+                    msg.data = true;
+                    goal_reached_pub_->publish(msg);
+
+                    goal_reached_published_ = true;
+
+                    RCLCPP_INFO(this->get_logger(), "Goal reached");
+                    }
                 return;
             }
 
@@ -151,6 +175,7 @@ class PathFollowerNode : public rclcpp::Node{
         std::size_t waypoint_index_ = 0;
         bool received_path_ = false;
         bool received_odom_ = false;
+        bool goal_reached_published_ = false;
 
         double kp_angular_;
         double max_angular_vel_;

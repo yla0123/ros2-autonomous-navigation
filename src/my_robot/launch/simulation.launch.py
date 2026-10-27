@@ -71,7 +71,15 @@ def generate_launch_description():
         name="ekf_filter_node",
         output="screen",
         parameters=[ekf_config],
-        )
+    )
+
+    evaluation_node = Node(
+        package='my_robot',
+        executable='evaluation_node',
+        name='evaluation_node',
+        output='screen',
+        parameters=[path_follower_config],
+    )
 
     ros_gz_sim_share = get_package_share_directory("ros_gz_sim")
     world_file = os.path.join(package_share, "worlds", "robot_world.sdf")
@@ -83,4 +91,4 @@ def generate_launch_description():
     )
 
 
-    return LaunchDescription([gazebo, bridge, odometry_node, ekf_node, lidar_node, path_follower_node])
+    return LaunchDescription([gazebo, bridge, odometry_node, ekf_node, lidar_node, path_follower_node, evaluation_node])
