@@ -77,7 +77,7 @@ The robot builds the map from LiDAR observations, plans a route to the requested
 
 ## Demo
 
-![Autonomous navigation demo](docs/navigation_demo.gif)
+![Autonomous navigation demo](/src/my_robot/docs/navigation_demo.gif)
 
 The demo shows the robot mapping the environment, planning around obstacles, replanning during motion, and autonomously reaching the requested goal.
 
