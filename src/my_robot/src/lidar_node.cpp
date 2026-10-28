@@ -184,13 +184,15 @@ class LidarNode : public rclcpp::Node
 
                     if (hit_obstacle){
                         grid[index] = 100;
-                    }else{
+                    }else if(grid[index] != 100){
                         grid[index] = 0;
                     }
                     break;
                 }
 
-                grid[index] = 0;
+                if(grid[index] != 100){
+                    grid[index] = 0;
+                }
 
                 const int e2 = 2 * error;
 
